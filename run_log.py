@@ -66,10 +66,10 @@ def get_joint_action_eval(game, multi_part_agent_ids, policy_list, actions_space
         for i in range(len(agents_id_list)):
             agent_id = agents_id_list[i]
             a_obs = all_observes[agent_id]
-            each = eval(function_name)(a_obs, action_space_list[i], game.is_act_continuous)
+            each,obs_transfer= eval(function_name)(a_obs, action_space_list[i], game.is_act_continuous)
             joint_action.append(each)
     print(joint_action)
-    return joint_action
+    return joint_action,obs_transfer
 
 
 def set_seed(g, env_name):
@@ -108,7 +108,7 @@ def render_game(g, fps=1):
         exec(import_s, globals())
 
     st = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-    game_info = dict(game_name=env_type, n_player=g.n_player, board_height=g.board_height, board_width=g.board_width,
+    game_info = dict(game_name=g.env_type, n_player=g.n_player, board_height=g.board_height, board_width=g.board_width,
                      init_state=str(g.get_render_data(g.current_state)), init_info=str(g.init_info), start_time=st,
                      mode="window", render_info={"color": g.colors, "grid_unit": g.grid_unit, "fix": g.grid_unit_fix})
 
@@ -195,7 +195,8 @@ def run_game(g, env_name, multi_part_agent_ids, actions_spaces, policy_list, ren
                     g.env_core.render()
 
         info_dict = {"time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}
-        joint_act = get_joint_action_eval(g, multi_part_agent_ids, policy_list, actions_spaces, all_observes)
+        joint_act,obs_transfer= get_joint_action_eval(g, multi_part_agent_ids, policy_list, actions_spaces, all_observes)
+        
         all_observes, reward, done, info_before, info_after = g.step(joint_act)
         if render_mode:
             if hasattr(g, "render") and g.game_name == 'logistics_transportation':
@@ -226,10 +227,10 @@ def get_valid_agents():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--my_ai", default="random", help="football_5v5_mappo/football_11v11_mappo/random")
-    parser.add_argument("--opponent", default="random", help="football_5v5_mappo/football_11v11_mappo/random")
+    parser.add_argument("--my_ai", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
+    parser.add_argument("--opponent", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
     # 11vs11 scenario: "football_11_vs_11_stochastic", 5vs5 scenario: "football_5v5_malib",
-    parser.add_argument("--env", default="football_11_vs_11_stochastic",
+    parser.add_argument("--env", default="football_5v5_malib",
                         help="football_11_vs_11_stochastic/football_5v5_malib")
     args = parser.parse_args()
 

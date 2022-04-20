@@ -10,6 +10,7 @@ from pathlib import Path
 # from gfootball.env import player_base
 from typing import Dict, Any, Tuple, Callable, List, Sequence
 from gym import spaces
+from utils.discrete import Discrete
 # from gfootball.env import football_action_set
 
 
@@ -24,7 +25,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import operator
 import warnings
-
 DataTransferType = np.ndarray
 ModelConfig = Dict[str, Any]
 
@@ -247,6 +247,15 @@ class DiscreteFlattenPreprocessor(Preprocessor):
     def write(self, array, offset, data):
         pass
 
+class NumpyArrayFlattenPreprocessor(Preprocessor):
+    def __init__(self, space: spaces.Discrete):
+        super(NumpyArrayFlattenPreprocessor, self).__init__(space)
+        self._size = space.size
+    def transform(self, data, nested=False) -> DataTransferType:
+        """Transform original data to feet the preprocessed shape. Nested works for nested array."""
+        pass
+    def write(self, array: DataTransferType, offset: int, data: Any):
+        pass
 
 class Mode:
     FLATTEN = "flatten"
@@ -266,6 +275,8 @@ def get_preprocessor(space: spaces.Space, mode: str = Mode.FLATTEN):
             return BoxFlattenPreprocessor
         elif isinstance(space, spaces.Discrete):
             return DiscreteFlattenPreprocessor
+        elif isinstance(space,np.ndarray):
+            return NumpyArrayFlattenPreprocessor
         else:
             raise TypeError(f"Unexpected space type: {type(space)}")
     elif mode == Mode.STACK:
@@ -1214,7 +1225,7 @@ class Player(PlayerBase):
         dist = torch.distributions.Categorical(logits=logits)
         action = dist.sample().numpy()
         # actions = [football_action_set.action_set_dict[self._action_set][action]]
-        return action
+        return action,observation
 
 
 def load_model(load_path):
@@ -1271,9 +1282,9 @@ def action_to_list(a):
 def my_controller(observation, action_space, is_act_continuous=False):
     obs = [observation]
     player_id = observation['controlled_player_index']
-    action = players[player_id].take_action(obs)
+    action,obs_transfer = players[player_id].take_action(obs)
     # action = action_to_list(action)
     # action_num = action_dict[str(action[0])]
     action_final = [[0] * 19]
     action_final[0][action] = 1
-    return action_final
+    return action_final,obs_transfer

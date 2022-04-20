@@ -1,7 +1,7 @@
 # -*- coding:utf-8  -*-
 # 作者：zruizhi   
 # 创建时间： 2020/9/11 11:17 上午   
-# 描述：选择运行环境，需要维护env/__ini__.py && config.json（存储环境默认参数）
+# 描述：选择运行环境，需要维护env/__init__.py && config.json（存储环境默认参数）
 
 import json
 import env

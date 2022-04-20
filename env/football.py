@@ -2,6 +2,7 @@
 # Time  : 2020/12/28 16:33
 # Author: Yahui Cui
 import copy
+from multiprocessing import allow_connection_pickling
 
 from env.simulators.game import Game
 from env.obs_interfaces.observation import *
@@ -10,8 +11,8 @@ import numpy as np
 import json
 from utils.discrete import Discrete
 from utils.box import Box
-
-
+from gym import spaces
+from agents.football_5v5_mappo.submission import *
 class Football(Game, DictObservation):
     def __init__(self, conf):
         super().__init__(conf['n_player'], conf['is_obs_continuous'], conf['is_act_continuous'],
@@ -29,18 +30,38 @@ class Football(Game, DictObservation):
             dump_frequency=0,
             number_of_left_players_agent_controls=self.agent_nums[0],
             number_of_right_players_agent_controls=self.agent_nums[1])
-
         self.load_action_space(conf)
         obs_list = self.env_core.reset()
+        self.obs_list = obs_list
         self.won = {}
         self.joint_action_space = self.set_action_space()
+        self.action_space = self.get_single_action_space(0)
         self.current_state = self.get_sorted_next_state(obs_list)
-        self.all_observes = self.current_state
+        # transfer observation
+        self.encoder = FeatureEncoder()
+        self.all_observes = []
+        for observe in self.current_state:
+            encode_obs = concate_observation_from_raw(self.encoder.encode(observe))
+            self.all_observes.append(encode_obs)
+        self.all_observes = np.array(self.all_observes)
+        self.all_observes_dim = self.all_observes[0].size
+        # contrust observation space
+        low = np.array([np.inf]*self.all_observes_dim)
+        high = np.array([-np.inf]*self.all_observes_dim)
+        self.observation_space = gym.spaces.Box(low,high)
+        self.joint_observation_space = [self.observation_space for _ in range(self.n_player)]
+        self.share_observation_space = self.joint_observation_space.copy()
+
         self.n_return_temp = [0.0] * self.n_player
         self.n_return = [0.0] * self.n_player
-
         self.action_dim = self.get_action_dim()
         self.init_info = None
+    # random seed
+    def seed(self, seed=None):
+        if seed is None:
+            self.env_core.seed(1)
+        else:
+            self.env_core.seed(seed)
 
     def load_action_space(self, conf):
         if "act_box" in conf:
@@ -55,21 +76,25 @@ class Football(Game, DictObservation):
                 if "discrete_n" not in input_action:
                     raise Exception("act_box in discrete case must have field discrete_n")
                 discrete_n = int(input_action["discrete_n"])
-                self.env_core.action_space = Discrete(discrete_n)
+                self.env_core.action_space = spaces.Discrete(discrete_n)
 
     def step(self, joint_action):
-        action = self.decode(joint_action)
+        # action = self.decode(joint_action)
         info_before = self.step_before_info()
-        next_state, reward, self.done, info_after = self.get_next_state(action)
-        sorted_next_state = self.get_sorted_next_state(next_state)
-        self.current_state = sorted_next_state
-        self.all_observes = self.current_state
+        next_state, reward, self.done, info_after = self.get_next_state(joint_action)
+        self.current_state = self.get_sorted_next_state(next_state)
+        self.all_observes = []
+        for observe in self.current_state:
+            encode_obs = concate_observation_from_raw(self.encoder.encode(observe))
+            self.all_observes.append(encode_obs)
+        self.all_observes = np.array(self.all_observes)
         if isinstance(reward, np.ndarray):
             reward = reward.tolist()
         reward = self.get_reward(reward)
         self.step_cnt += 1
-        done = self.is_terminal()
-        return self.all_observes, reward, done, info_before, info_after
+        dones = self.is_terminal()
+        dones = np.array([dones] * self.n_player)
+        return self.all_observes, reward, dones, info_before, info_after
 
     def decode(self, joint_action):
         if isinstance(joint_action, np.ndarray):
@@ -109,7 +134,7 @@ class Football(Game, DictObservation):
         return self.done
 
     def set_action_space(self):
-        action_space = [[self.env_core.action_space] for _ in range(self.n_player)]
+        action_space = [self.env_core.action_space for _ in range(self.n_player)]
         return action_space
 
     def check_win(self):
@@ -127,7 +152,12 @@ class Football(Game, DictObservation):
         self.step_cnt = 0
         self.done = False
         self.current_state = obs_list
-        self.all_observes = self.current_state
+        self.all_observes = []
+        for observe in self.current_state:
+            encode_obs = concate_observation_from_raw(self.encoder.encode(observe))
+            self.all_observes.append(encode_obs)
+        self.all_observes = np.array(self.all_observes)
+
         return self.all_observes
 
     def get_action_dim(self):
@@ -137,7 +167,7 @@ class Football(Game, DictObservation):
             return self.joint_action_space[0][0]
 
         for i in range(len(self.joint_action_space)):
-            action_dim *= self.joint_action_space[i][0].n
+            action_dim *= self.joint_action_space[i].n
 
         return action_dim
 
@@ -171,5 +201,7 @@ class Football(Game, DictObservation):
             each["controlled_player_index"] = index
             new_state.append(each)
             index += 1
-
         return new_state
+
+    def close(self):
+        self.env_core.close()
