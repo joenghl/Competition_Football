@@ -1287,4 +1287,4 @@ def my_controller(observation, action_space, is_act_continuous=False):
     # action_num = action_dict[str(action[0])]
     action_final = [[0] * 19]
     action_final[0][action] = 1
-    return action_final,obs_transfer
+    return action_final

@@ -68,11 +68,10 @@ class DummyVecEnv(ShareVecEnv):
         ShareVecEnv.__init__(self, len(
             env_list), env.observation_space, env.share_observation_space, env.action_space, env.joint_action_space)
         self.actions = None
-
     def reset(self):
         self.envs = [fn() for fn in self.env_list]
         obs = [env.reset() for env in self.envs]
-        return np.stack(obs)
+        return np.stack(obs)        #(env_num(rollout_thread),agent_num,oberservation_dim)  (1,4,133)
 
     def step(self,actions):
         self.actions = actions

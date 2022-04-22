@@ -36,14 +36,14 @@ class Football(Game, DictObservation):
         self.won = {}
         self.joint_action_space = self.set_action_space()
         self.action_space = self.get_single_action_space(0)
-        self.current_state = self.get_sorted_next_state(obs_list)
+        self.current_state = self.get_sorted_next_state(obs_list)   #raw joint obeservation
         # transfer observation
         self.encoder = FeatureEncoder()
         self.all_observes = []
         for observe in self.current_state:
             encode_obs = concate_observation_from_raw(self.encoder.encode(observe))
             self.all_observes.append(encode_obs)
-        self.all_observes = np.array(self.all_observes)
+        self.all_observes = np.array(self.all_observes)    #transfered observation  list[array(133,)]
         self.all_observes_dim = self.all_observes[0].size
         # contrust observation space
         low = np.array([np.inf]*self.all_observes_dim)

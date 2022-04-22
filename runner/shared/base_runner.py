@@ -40,7 +40,8 @@ class Runner(object):
         self.use_wandb = self.all_args.use_wandb
         self.use_render = self.all_args.use_render
         self.recurrent_N = self.all_args.recurrent_N
-
+        self.left_agent_num = self.all_args.number_of_left_players_agent_controls
+        self.right_agent_num = self.all_args.number_of_right_players_agent_controls
         # interval
         self.save_interval = self.all_args.save_interval
         self.use_eval = self.all_args.use_eval
@@ -87,7 +88,7 @@ class Runner(object):
 
         # buffer
         self.buffer = SharedReplayBuffer(self.all_args,
-                                        self.num_agents,
+                                        self.left_agent_num,
                                         self.envs.observation_space,
                                         share_observation_space,
                                         self.envs.action_space)

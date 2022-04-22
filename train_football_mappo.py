@@ -68,12 +68,14 @@ def make_eval_env(all_args):
 
 
 def parse_args(args, parser):
+    # parser.add_argument("--env_config", type=dict, default = DEFAULT_ENV_CONFIG)
+    parser.add_argument("--number_of_left_players_agent_controls", type=int, default=4)
+    parser.add_argument('--number_of_right_players_agent_controls', type=int, default=4)
     parser.add_argument('--env_name', type=str, default="football_5v5_malib",
                         help="football_11_vs_11_stochastic/football_5v5_malib")
     parser.add_argument('--representation', type=str, default="raw")
     parser.add_argument("--my_ai", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
     parser.add_argument("--opponent", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
-    # 11vs11 scenario: "football_11_vs_11_stochastic", 5vs5 scenario: "football_5v5_malib",
     parser.add_argument('--rewards', type=str, default="scoring")
     all_args = parser.parse_known_args(args)[0]
     return all_args
@@ -83,6 +85,7 @@ def parse_args(args, parser):
 def main(args):
     parser = get_config()
     all_args = parse_args(args, parser)
+
     if all_args.algorithm_name == "rmappo":
         assert (all_args.use_recurrent_policy or all_args.use_naive_recurrent_policy), ("check recurrent policy!")
     elif all_args.algorithm_name == "mappo":
@@ -106,7 +109,6 @@ def main(args):
     # run dir
     run_dir = Path(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + "/results") / \
               (all_args.env_name + '_' + all_args.representation) / all_args.algorithm_name / all_args.experiment_name
-    print(run_dir)
     if not run_dir.exists():
         os.makedirs(str(run_dir))
 
@@ -143,7 +145,7 @@ def main(args):
     torch.manual_seed(all_args.seed)
     torch.cuda.manual_seed_all(all_args.seed)
     np.random.seed(all_args.seed)
-
+    
     # env init
     num_agents = DEFAULT_ENV_CONFIG[all_args.env_name]["n_player"]
     envs = make_train_env(all_args)

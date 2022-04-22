@@ -1,24 +1,11 @@
-"""
-# @Time    : 2021/7/1 7:15 下午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : env_runner.py
-"""
-
-"""
-# @Time    : 2021/7/1 7:04 下午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : huaru_runner.py
-"""
-
 import time
+from matplotlib.style import available
 import numpy as np
 import torch
 from runner.shared.base_runner import Runner
 import wandb
 import imageio
-
+from agents.football_5v5_mappo.submission import *
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -44,11 +31,13 @@ class FootballRunner(Runner):
             for step in range(self.episode_length):
                 # Sample actions
                 print(step,self.episode_length)
-                values, actions, action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
+                values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
                 # Obser reward and next obs
                 actions_env = np.squeeze(actions,axis=-1).tolist()
+                for threads in range(self.n_eval_rollout_threads):
+                    actions_env[threads] = actions_env[threads] + opp_actions[threads]       
                 obs, rewards, dones, _, info_after = self.envs.step(actions_env)
-                data = obs, rewards, dones, info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic
+                data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic
 
                 # insert data into buffer
                 self.insert(data)
@@ -98,7 +87,7 @@ class FootballRunner(Runner):
 
     def warmup(self):
         # reset env
-        obs = self.envs.reset()  # shape = (5, 2, 14)
+        obs = self.envs.reset()[:,0:4,:]  # shape = (5, 2, 14)
         share_obs = obs
         # replay buffer
 
@@ -108,18 +97,29 @@ class FootballRunner(Runner):
     @torch.no_grad()
     def collect(self, step):
         self.trainer.prep_rollout()
+        action_mask = np.concatenate(np.array((1 - self.buffer.obs[step][...,: self.envs.action_space.n]),dtype=float))        
         value, action, action_log_prob, rnn_states, rnn_states_critic \
             = self.trainer.policy.get_actions(np.concatenate(self.buffer.share_obs[step]),
                                               np.concatenate(self.buffer.obs[step]),
                                               np.concatenate(self.buffer.rnn_states[step]),
                                               np.concatenate(self.buffer.rnn_states_critic[step]),
-                                              np.concatenate(self.buffer.masks[step]))
+                                              np.concatenate(self.buffer.masks[step]),
+                                              available_actions = action_mask)
+
         # [self.envs, agents, dim]
         values = np.array(np.split(_t2n(value), self.n_rollout_threads))
         actions = np.array(np.split(_t2n(action), self.n_rollout_threads))
         action_log_probs = np.array(np.split(_t2n(action_log_prob), self.n_rollout_threads))
         rnn_states = np.array(np.split(_t2n(rnn_states), self.n_rollout_threads))
         rnn_states_critic = np.array(np.split(_t2n(rnn_states_critic), self.n_rollout_threads))
+        opp_actions = []
+        for threads in range(self.n_rollout_threads):
+            thr_opp_actions = []
+            for obs_id in range(self.right_agent_num):
+                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.action_space)
+                thr_opp_actions.append(opp_action)
+            decode_action = self.envs.envs[threads].decode(thr_opp_actions)
+            opp_actions.append(decode_action)
         # rearrange action
         # if self.envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
         #     for i in range(self.envs.action_space[0].shape):
@@ -133,7 +133,7 @@ class FootballRunner(Runner):
         # else:
         #     raise NotImplementedError
 
-        return values, actions, action_log_probs, rnn_states, rnn_states_critic
+        return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic
 
     def insert(self, data):
         obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic = data
@@ -142,7 +142,7 @@ class FootballRunner(Runner):
                                              dtype=np.float32)
         rnn_states_critic[dones == True] = np.zeros(((dones == True).sum(), *self.buffer.rnn_states_critic.shape[3:]),
                                                     dtype=np.float32)
-        masks = np.ones((self.n_rollout_threads, self.num_agents, 1), dtype=np.float32)
+        masks = np.ones((self.n_rollout_threads, self.left_agent_num, 1), dtype=np.float32)
         masks[dones == True] = np.zeros(((dones == True).sum(), 1), dtype=np.float32)
 
         rewards = np.expand_dims(rewards,-1)
