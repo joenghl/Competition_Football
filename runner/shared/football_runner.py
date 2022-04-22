@@ -5,7 +5,7 @@ import torch
 from runner.shared.base_runner import Runner
 import wandb
 import imageio
-from agents.football_5v5_mappo.submission import *
+from agents.random.submission import *
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -30,7 +30,6 @@ class FootballRunner(Runner):
 
             for step in range(self.episode_length):
                 # Sample actions
-                print(step,self.episode_length)
                 values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
                 # Obser reward and next obs
                 actions_env = np.squeeze(actions,axis=-1).tolist()
@@ -116,7 +115,7 @@ class FootballRunner(Runner):
         for threads in range(self.n_rollout_threads):
             thr_opp_actions = []
             for obs_id in range(self.right_agent_num):
-                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.action_space)
+                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.joint_action_space[self.left_agent_num:-1])
                 thr_opp_actions.append(opp_action)
             decode_action = self.envs.envs[threads].decode(thr_opp_actions)
             opp_actions.append(decode_action)
