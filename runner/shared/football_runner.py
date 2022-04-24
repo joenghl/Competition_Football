@@ -5,7 +5,7 @@ import torch
 from runner.shared.base_runner import Runner
 import wandb
 import imageio
-from agents.football_5v5_mappo.submission import *
+from agents.random.submission import my_controller
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -27,16 +27,18 @@ class FootballRunner(Runner):
         for episode in range(episodes):
             if self.use_linear_lr_decay:
                 self.trainer.policy.lr_decay(episode, episodes)
-
             for step in range(self.episode_length):
-                # Sample actions
                 print(step,self.episode_length)
+                # Sample actions
                 values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
                 # Obser reward and next obs
                 actions_env = np.squeeze(actions,axis=-1).tolist()
                 for threads in range(self.n_eval_rollout_threads):
                     actions_env[threads] = actions_env[threads] + opp_actions[threads]       
                 obs, rewards, dones, _, info_after = self.envs.step(actions_env)
+                print(actions)
+                print(rewards)
+                print(dones)
                 data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic
 
                 # insert data into buffer
@@ -46,7 +48,7 @@ class FootballRunner(Runner):
             self.compute()
             train_infos = self.train()
 
-            # post process
+            #post process
             total_num_steps = (episode + 1) * self.episode_length * self.n_rollout_threads
 
             # save model
@@ -66,24 +68,14 @@ class FootballRunner(Runner):
                               self.num_env_steps,
                               int(total_num_steps / (end - start))))
 
-                # if self.env_name == "MPE":
-                #     env_infos = {}
-                #     for agent_id in range(self.num_agents):
-                #         idv_rews = []
-                #         for info in infos:
-                #             if 'individual_reward' in info[agent_id].keys():
-                #                 idv_rews.append(info[agent_id]['individual_reward'])
-                #         agent_k = 'agent%i/individual_rewards' % agent_id
-                #         env_infos[agent_k] = idv_rews
-
                 train_infos["average_episode_rewards"] = np.mean(self.buffer.rewards) * self.episode_length
                 print("average episode rewards is {}".format(train_infos["average_episode_rewards"]))
                 self.log_train(train_infos, total_num_steps)
-                # self.log_env(env_infos, total_num_steps)
+                #self.log_env(env_infos, total_num_steps)
 
             # eval
             if episode % self.eval_interval == 0 and self.use_eval:
-                self.eval(total_num_steps)
+                self.eval(total_num_steps, self.eval_episodes)
 
     def warmup(self):
         # reset env
@@ -116,7 +108,7 @@ class FootballRunner(Runner):
         for threads in range(self.n_rollout_threads):
             thr_opp_actions = []
             for obs_id in range(self.right_agent_num):
-                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.action_space)
+                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.joint_action_space[self.left_agent_num:-1])
                 thr_opp_actions.append(opp_action)
             decode_action = self.envs.envs[threads].decode(thr_opp_actions)
             opp_actions.append(decode_action)
@@ -151,47 +143,68 @@ class FootballRunner(Runner):
                            masks)
 
     @torch.no_grad()
-    def eval(self, total_num_steps):
+    def eval(self, total_num_steps ,eval_episodes):
+        eval_episodes_rewards = []
         eval_episode_rewards = []
-        eval_obs = self.eval_envs.reset()
-
+        eval_obs = self.eval_envs.reset()[:,0:4,:]
+        
         eval_rnn_states = np.zeros((self.n_eval_rollout_threads, *self.buffer.rnn_states.shape[2:]), dtype=np.float32)
-        eval_masks = np.ones((self.n_eval_rollout_threads, self.num_agents, 1), dtype=np.float32)
+        eval_masks = np.ones((self.n_eval_rollout_threads, self.left_agent_num, 1), dtype=np.float32)
+        for episode in range(eval_episodes):
+            for eval_step in range(self.episode_length):
+                self.trainer.prep_rollout()
+                action_mask = np.concatenate(np.array((1 - eval_obs[...,: self.eval_envs.action_space.n]),dtype=float)) 
+                eval_action, eval_rnn_states = self.trainer.policy.act(np.concatenate(eval_obs),
+                                                                    np.concatenate(eval_rnn_states),
+                                                                    np.concatenate(eval_masks),
+                                                                    available_actions=action_mask,
+                                                                    deterministic=False)
+                eval_actions = np.array(np.split(_t2n(eval_action), self.n_eval_rollout_threads))
+                eval_rnn_states = np.array(np.split(_t2n(eval_rnn_states), self.n_eval_rollout_threads))
+                #get opponents actions
+                opp_actions = []
+                for threads in range(self.n_rollout_threads):
+                    thr_opp_actions = []
+                    for obs_id in range(self.right_agent_num):
+                        opp_action = my_controller(self.eval_envs.envs[threads].current_state[self.left_agent_num + obs_id],
+                                                    self.eval_envs.joint_action_space[self.left_agent_num:-1])
+                        thr_opp_actions.append(opp_action)
+                    decode_action = self.envs.envs[threads].decode(thr_opp_actions)
+                    opp_actions.append(decode_action)
+                eval_actions_env = np.squeeze(eval_actions,axis=-1).tolist()
+                for threads in range(self.n_eval_rollout_threads):
+                    eval_actions_env[threads] = eval_actions_env[threads] + opp_actions[threads]  
 
-        for eval_step in range(self.episode_length):
-            self.trainer.prep_rollout()
-            eval_action, eval_rnn_states = self.trainer.policy.act(np.concatenate(eval_obs),
-                                                                   np.concatenate(eval_rnn_states),
-                                                                   np.concatenate(eval_masks),
-                                                                   deterministic=True)
-            eval_actions = np.array(np.split(_t2n(eval_action), self.n_eval_rollout_threads))
-            eval_rnn_states = np.array(np.split(_t2n(eval_rnn_states), self.n_eval_rollout_threads))
+                # if self.eval_envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
+                #     for i in range(self.eval_envs.action_space[0].shape):
+                #         eval_uc_actions_env = np.eye(self.eval_envs.action_space[0].high[i] + 1)[eval_actions[:, :, i]]
+                #         if i == 0:
+                #             eval_actions_env = eval_uc_actions_env
+                #         else:
+                #             eval_actions_env = np.concatenate((eval_actions_env, eval_uc_actions_env), axis=2)
+                # elif self.eval_envs.action_space[0].__class__.__name__ == 'Discrete':
+                #     eval_actions_env = np.squeeze(np.eye(self.eval_envs.action_space[0].n)[eval_actions], 2)
+                # else:
+                #     raise NotImplementedError
 
-            if self.eval_envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
-                for i in range(self.eval_envs.action_space[0].shape):
-                    eval_uc_actions_env = np.eye(self.eval_envs.action_space[0].high[i] + 1)[eval_actions[:, :, i]]
-                    if i == 0:
-                        eval_actions_env = eval_uc_actions_env
-                    else:
-                        eval_actions_env = np.concatenate((eval_actions_env, eval_uc_actions_env), axis=2)
-            elif self.eval_envs.action_space[0].__class__.__name__ == 'Discrete':
-                eval_actions_env = np.squeeze(np.eye(self.eval_envs.action_space[0].n)[eval_actions], 2)
-            else:
-                raise NotImplementedError
+                # Obser reward and next obs
+                eval_obs, eval_rewards, eval_dones, _, eval_infos = self.eval_envs.step(eval_actions_env)
+                eval_dones = eval_dones[:,0:4]
+                eval_obs = eval_obs[:,0:4,:]
+                eval_rewards = eval_rewards[:,0:4]
+                eval_episode_rewards.append(eval_rewards)
+                eval_rnn_states[eval_dones == True] = np.zeros(
+                    ((eval_dones == True).sum(), self.recurrent_N, self.hidden_size), dtype=np.float32)
+                eval_masks = np.ones((self.n_eval_rollout_threads, self.left_agent_num, 1), dtype=np.float32)
+                eval_masks[eval_dones == True] = np.zeros(((eval_dones == True).sum(), 1), dtype=np.float32)
 
-            # Obser reward and next obs
-            eval_obs, eval_rewards, eval_dones, eval_infos = self.eval_envs.step(eval_actions_env)
-            eval_episode_rewards.append(eval_rewards)
+            eval_average_episode_rewards = np.sum(np.array(eval_episode_rewards), axis=0)
+            eval_average_episode_rewards = np.mean(eval_average_episode_rewards)
+            eval_episodes_rewards.append(eval_average_episode_rewards)
 
-            eval_rnn_states[eval_dones == True] = np.zeros(
-                ((eval_dones == True).sum(), self.recurrent_N, self.hidden_size), dtype=np.float32)
-            eval_masks = np.ones((self.n_eval_rollout_threads, self.num_agents, 1), dtype=np.float32)
-            eval_masks[eval_dones == True] = np.zeros(((eval_dones == True).sum(), 1), dtype=np.float32)
-
-        eval_episode_rewards = np.array(eval_episode_rewards)
         eval_env_infos = {}
-        eval_env_infos['eval_average_episode_rewards'] = np.sum(np.array(eval_episode_rewards), axis=0)
-        eval_average_episode_rewards = np.mean(eval_env_infos['eval_average_episode_rewards'])
+        eval_episodes_rewards = np.array(eval_episodes_rewards)
+        eval_env_infos['eval_average_episode_rewards'] =  eval_episodes_rewards
         print("eval average episode rewards of agent: " + str(eval_average_episode_rewards))
         self.log_env(eval_env_infos, total_num_steps)
 

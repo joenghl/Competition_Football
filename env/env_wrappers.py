@@ -1,11 +1,3 @@
-"""
-# @Time    : 2021/7/1 8:44 上午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : env_wrappers.py
-Modified from OpenAI Baselines code to work with multi-agent envs
-"""
-
 import numpy as np
 import gym
 from gym import spaces
@@ -69,26 +61,22 @@ class DummyVecEnv(ShareVecEnv):
             env_list), env.observation_space, env.share_observation_space, env.action_space, env.joint_action_space)
         self.actions = None
     def reset(self):
-        self.envs = [fn() for fn in self.env_list]
         obs = [env.reset() for env in self.envs]
         return np.stack(obs)        #(env_num(rollout_thread),agent_num,oberservation_dim)  (1,4,133)
 
     def step(self,actions):
         self.actions = actions
         results = [env.step(a) for(a,env) in zip(self.actions,self.envs)]
-        obs,rews,dones,info_bef,info_aft = map(np.array,zip(*results))
-        print(dones)
+        obs, rews, dones, info_bef, info_aft = map(np.array,zip(*results))
         for(i,done) in enumerate(dones):
             if 'bool' in done.__class__.__name__:
                 if done:
-                    self.envs[i] = self.env_list[i]()
                     obs[i] = self.envs[i].reset()
             else:
                 if np.all(done):
-                    self.envs[i] = self.env_list[i]()
                     obs[i] = self.envs[i].reset()
         self.actions = None
-        return obs,rews,dones,info_bef,info_aft
+        return obs, rews, dones, info_bef, info_aft
         
     def close(self):
         for env in self.envs:

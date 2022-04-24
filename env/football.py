@@ -28,6 +28,7 @@ class Football(Game, DictObservation):
             logdir='/tmp/rllib_test',
             write_goal_dumps=False, write_full_episode_dumps=True, render=False,
             dump_frequency=0,
+            rewards='scoring,checkpoints',
             number_of_left_players_agent_controls=self.agent_nums[0],
             number_of_right_players_agent_controls=self.agent_nums[1])
         self.load_action_space(conf)
@@ -43,7 +44,7 @@ class Football(Game, DictObservation):
         for observe in self.current_state:
             encode_obs = concate_observation_from_raw(self.encoder.encode(observe))
             self.all_observes.append(encode_obs)
-        self.all_observes = np.array(self.all_observes)    #transfered observation  list[array(133,)]
+        self.all_observes = np.array(self.all_observes)    #transfered observation  list[array(133,)], len(list)=n_players
         self.all_observes_dim = self.all_observes[0].size
         # contrust observation space
         low = np.array([np.inf]*self.all_observes_dim)
@@ -128,8 +129,8 @@ class Football(Game, DictObservation):
         if self.step_cnt >= self.max_step:
             self.done = True
 
-        if self.done:
-            self.env_core.close()
+        # if self.done:
+        #     self.env_core.close()
 
         return self.done
 

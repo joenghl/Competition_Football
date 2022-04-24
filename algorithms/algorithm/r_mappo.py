@@ -1,10 +1,3 @@
-"""
-# @Time    : 2021/7/1 6:52 下午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : r_mappo.py
-"""
-
 import numpy as np
 import torch
 import torch.nn as nn

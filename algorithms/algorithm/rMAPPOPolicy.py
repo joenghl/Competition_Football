@@ -1,9 +1,4 @@
-"""
-# @Time    : 2021/7/1 6:53 下午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : rMAPPOPolicy.py
-"""
+
 
 import torch
 from algorithms.algorithm.r_actor_critic import R_Actor, R_Critic

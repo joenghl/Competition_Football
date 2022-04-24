@@ -173,10 +173,10 @@ def get_config():
                         help="Number of parallel envs for evaluating rollouts")
     parser.add_argument("--n_render_rollout_threads", type=int, default=1,
                         help="Number of parallel envs for rendering rollouts")
-    parser.add_argument("--num_env_steps", type=int, default=3000,
+    parser.add_argument("--num_env_steps", type=int, default=10e7,
                         help='Number of environment steps to train (default: 10e6)')
     parser.add_argument("--user_name", type=str, default='marl',help="[for wandb usage], to specify user's name for simply collecting training data.")
-    parser.add_argument("--use_wandb", action='store_false', default=False, help="[for wandb usage], by default True, will log date to wandb server. or else will use tensorboard to log data.")
+    parser.add_argument("--use_wandb", action='store_false', default=True, help="[for wandb usage], by default True, will log date to wandb server. or else will use tensorboard to log data.")
 
     # env parameters
     parser.add_argument("--use_obs_instead_of_state", action='store_true',
@@ -202,7 +202,7 @@ def get_config():
     parser.add_argument("--use_ReLU", action='store_false',
                         default=True, help="Whether to use ReLU")
     parser.add_argument("--use_popart", action='store_true', default=False, help="by default False, use PopArt to normalize rewards.")
-    parser.add_argument("--use_valuenorm", action='store_false', default=True, help="by default True, use running mean and std to normalize rewards.")
+    parser.add_argument("--use_valuenorm", action='store_false', default=False, help="by default False, use running mean and std to normalize rewards.")
     parser.add_argument("--use_feature_normalization", action='store_false',
                         default=True, help="Whether to apply layernorm to the inputs")
     parser.add_argument("--use_orthogonal", action='store_false', default=True,
@@ -264,13 +264,13 @@ def get_config():
     parser.add_argument("--use_linear_lr_decay", action='store_true',
                         default=False, help='use a linear schedule on the learning rate')
     # save parameters
-    parser.add_argument("--save_interval", type=int, default=1, help="time duration between contiunous twice models saving.")
+    parser.add_argument("--save_interval", type=int, default=100, help="time duration between contiunous twice models saving.")
 
     # log parameters
-    parser.add_argument("--log_interval", type=int, default=5, help="time duration between contiunous twice log printing.")
+    parser.add_argument("--log_interval", type=int, default=25, help="time duration between contiunous twice log printing.")
 
     # eval parameters
-    parser.add_argument("--use_eval", action='store_true', default=False, help="by default, do not start evaluation. If set`, start evaluation alongside with training.")
+    parser.add_argument("--use_eval", action='store_true', default=True, help="by default, do not start evaluation. If set`, start evaluation alongside with training.")
     parser.add_argument("--eval_interval", type=int, default=25, help="time duration between contiunous twice evaluation progress.")
     parser.add_argument("--eval_episodes", type=int, default=32, help="number of episodes of a single evaluation.")
 

@@ -1,9 +1,4 @@
-"""
-# @Time    : 2021/7/1 6:53 下午
-# @Author  : hezhiqiang01
-# @Email   : hezhiqiang01@baidu.com
-# @File    : r_actor_critic.py
-"""
+
 
 import torch
 import torch.nn as nn
