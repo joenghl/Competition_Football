@@ -74,7 +74,11 @@ def parse_args(args, parser):
     parser.add_argument('--representation', type=str, default="raw")
     parser.add_argument("--my_ai", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
     parser.add_argument("--opponent", default="football_5v5_mappo", help="football_5v5_mappo/football_11v11_mappo/random")
+<<<<<<< HEAD
     parser.add_argument('--rewards', type=str, default="scoring,checkpoints")
+=======
+    parser.add_argument('--rewards', type=str, default="scoring")
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
     parser.add_argument('--run_name', type=str, default="run")
     all_args = parser.parse_known_args(args)[0]
     return all_args
@@ -136,9 +140,15 @@ def main(args):
         if not run_dir.exists():
             os.makedirs(str(run_dir))
 
+<<<<<<< HEAD
     setproctitle.setproctitle(str(all_args.algorithm_name) + "-" + \
                               str(all_args.env_name) + "-" + str(all_args.experiment_name) + "@" + str(
         all_args.user_name))
+=======
+    # setproctitle.setproctitle(str(all_args.algorithm_name) + "-" + \
+    #                           str(all_args.env_name) + "-" + str(all_args.experiment_name) + "@" + str(
+    #     all_args.user_name))
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
 
     # seed
     torch.manual_seed(all_args.seed)

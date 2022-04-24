@@ -5,7 +5,11 @@ import torch
 from runner.shared.base_runner import Runner
 import wandb
 import imageio
+<<<<<<< HEAD
 from agents.random.submission import my_controller
+=======
+from agents.random.submission import *
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -28,7 +32,10 @@ class FootballRunner(Runner):
             if self.use_linear_lr_decay:
                 self.trainer.policy.lr_decay(episode, episodes)
             for step in range(self.episode_length):
+<<<<<<< HEAD
                 print(step,self.episode_length)
+=======
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
                 # Sample actions
                 values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
                 # Obser reward and next obs

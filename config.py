@@ -173,7 +173,11 @@ def get_config():
                         help="Number of parallel envs for evaluating rollouts")
     parser.add_argument("--n_render_rollout_threads", type=int, default=1,
                         help="Number of parallel envs for rendering rollouts")
+<<<<<<< HEAD
     parser.add_argument("--num_env_steps", type=int, default=10e7,
+=======
+    parser.add_argument("--num_env_steps", type=int, default=10e6,
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
                         help='Number of environment steps to train (default: 10e6)')
     parser.add_argument("--user_name", type=str, default='marl',help="[for wandb usage], to specify user's name for simply collecting training data.")
     parser.add_argument("--use_wandb", action='store_false', default=True, help="[for wandb usage], by default True, will log date to wandb server. or else will use tensorboard to log data.")
@@ -267,7 +271,11 @@ def get_config():
     parser.add_argument("--save_interval", type=int, default=100, help="time duration between contiunous twice models saving.")
 
     # log parameters
+<<<<<<< HEAD
     parser.add_argument("--log_interval", type=int, default=25, help="time duration between contiunous twice log printing.")
+=======
+    parser.add_argument("--log_interval", type=int, default=4, help="time duration between contiunous twice log printing.")
+>>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
 
     # eval parameters
     parser.add_argument("--use_eval", action='store_true', default=True, help="by default, do not start evaluation. If set`, start evaluation alongside with training.")
