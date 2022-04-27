@@ -62,16 +62,12 @@ class DummyVecEnv(ShareVecEnv):
         self.actions = None
     def reset(self):
         obs = [env.reset() for env in self.envs]
-        return np.stack(obs)        #(env_num(rollout_thread),agent_num,oberservation_dim)  (1,4,133)
+        return np.stack(obs)        #(env_num(rollout_thread),agent_num,oberservation_dim)  (1,8,133)
 
     def step(self,actions):
         self.actions = actions
         results = [env.step(a) for(a,env) in zip(self.actions,self.envs)]
-<<<<<<< HEAD
         obs, rews, dones, info_bef, info_aft = map(np.array,zip(*results))
-=======
-        obs,rews,dones,info_bef,info_aft = map(np.array,zip(*results))
->>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
         for(i,done) in enumerate(dones):
             if 'bool' in done.__class__.__name__:
                 if done:

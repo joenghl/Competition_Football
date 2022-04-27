@@ -5,11 +5,8 @@ import torch
 from runner.shared.base_runner import Runner
 import wandb
 import imageio
-<<<<<<< HEAD
-from agents.random.submission import my_controller
-=======
-from agents.random.submission import *
->>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
+from agents.football_5v5_mappo.submission import my_controller
+
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -32,21 +29,18 @@ class FootballRunner(Runner):
             if self.use_linear_lr_decay:
                 self.trainer.policy.lr_decay(episode, episodes)
             for step in range(self.episode_length):
-<<<<<<< HEAD
                 print(step,self.episode_length)
-=======
->>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
                 # Sample actions
-                values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
-                # Obser reward and next obs
+                values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic, available_actions= self.collect(step)
+                # rearrange agent actions and opponent actions
                 actions_env = np.squeeze(actions,axis=-1).tolist()
                 for threads in range(self.n_eval_rollout_threads):
-                    actions_env[threads] = actions_env[threads] + opp_actions[threads]       
+                    actions_env[threads] = actions_env[threads] + opp_actions[threads]
+                # Obser reward and next obs       
                 obs, rewards, dones, _, info_after = self.envs.step(actions_env)
-                print(actions)
                 print(rewards)
                 print(dones)
-                data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic
+                data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
 
                 # insert data into buffer
                 self.insert(data)
@@ -77,33 +71,47 @@ class FootballRunner(Runner):
 
                 train_infos["average_episode_rewards"] = np.mean(self.buffer.rewards) * self.episode_length
                 print("average episode rewards is {}".format(train_infos["average_episode_rewards"]))
-                self.log_train(train_infos, total_num_steps)
-                #self.log_env(env_infos, total_num_steps)
 
+                # learning_rate = 0.01
+                # for i in range(100):
+                #     wandb.log({"learning_rate": learning_rate},i)
+
+                self.log_train(train_infos, total_num_steps)
+
+
+                # learning_rate = 0.02
+                # for i in range(100):
+                #     wandb.log({"learning_rate": learning_rate},i+100)                
+
+
+
+                
             # eval
             if episode % self.eval_interval == 0 and self.use_eval:
+
                 self.eval(total_num_steps, self.eval_episodes)
 
     def warmup(self):
         # reset env
-        obs = self.envs.reset()[:,0:4,:]  # shape = (5, 2, 14)
+        obs = self.envs.reset()[:,0:4,:]  #NOTE:obs.shape() = (n_rollout_thread,4,133)
         share_obs = obs
         # replay buffer
-
         self.buffer.share_obs[0] = share_obs.copy()
         self.buffer.obs[0] = obs.copy()
 
     @torch.no_grad()
     def collect(self, step):
         self.trainer.prep_rollout()
-        action_mask = np.concatenate(np.array((1 - self.buffer.obs[step][...,: self.envs.action_space.n]),dtype=float))        
+        #get agent actions
+        available_actions = np.array(self.buffer.obs[step][..., : self.envs.action_space.n])  #NOTE:available_actions is from observation,if change obs,check available_actions      
         value, action, action_log_prob, rnn_states, rnn_states_critic \
             = self.trainer.policy.get_actions(np.concatenate(self.buffer.share_obs[step]),
                                               np.concatenate(self.buffer.obs[step]),
                                               np.concatenate(self.buffer.rnn_states[step]),
                                               np.concatenate(self.buffer.rnn_states_critic[step]),
                                               np.concatenate(self.buffer.masks[step]),
-                                              available_actions = action_mask)
+                                              available_actions = np.concatenate(available_actions,dtype=float)
+                                              )
 
         # [self.envs, agents, dim]
         values = np.array(np.split(_t2n(value), self.n_rollout_threads))
@@ -111,31 +119,21 @@ class FootballRunner(Runner):
         action_log_probs = np.array(np.split(_t2n(action_log_prob), self.n_rollout_threads))
         rnn_states = np.array(np.split(_t2n(rnn_states), self.n_rollout_threads))
         rnn_states_critic = np.array(np.split(_t2n(rnn_states_critic), self.n_rollout_threads))
+        #get opponent actions
         opp_actions = []
         for threads in range(self.n_rollout_threads):
             thr_opp_actions = []
             for obs_id in range(self.right_agent_num):
-                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],self.envs.joint_action_space[self.left_agent_num:-1])
+                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],
+                                            self.envs.joint_action_space[self.left_agent_num:-1])
                 thr_opp_actions.append(opp_action)
             decode_action = self.envs.envs[threads].decode(thr_opp_actions)
             opp_actions.append(decode_action)
-        # rearrange action
-        # if self.envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
-        #     for i in range(self.envs.action_space[0].shape):
-        #         uc_actions_env = np.eye(self.envs.action_space[0].high[i] + 1)[actions[:, :, i]]
-        #         if i == 0:
-        #             actions_env = uc_actions_env
-        #         else:
-        #             actions_env = np.concatenate((actions_env, uc_actions_env), axis=2)
-        # elif self.envs.action_space[0].__class__.__name__ == 'Discrete':
-        #     actions_env = np.squeeze(np.eye(self.envs.action_space[0].n)[actions], 2)
-        # else:
-        #     raise NotImplementedError
 
-        return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic
+        return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
 
     def insert(self, data):
-        obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic = data
+        obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic, available_actions= data
 
         rnn_states[dones == True] = np.zeros(((dones == True).sum(), self.recurrent_N, self.hidden_size),
                                              dtype=np.float32)
@@ -147,12 +145,14 @@ class FootballRunner(Runner):
         rewards = np.expand_dims(rewards,-1)
         share_obs = obs     #no need for centralized_v
         self.buffer.insert(share_obs, obs, rnn_states, rnn_states_critic, actions, action_log_probs, values, rewards,
-                           masks)
+                           masks, available_actions = available_actions)
 
     @torch.no_grad()
     def eval(self, total_num_steps ,eval_episodes):
+        print("---------begin eval-------------")
         eval_episodes_rewards = []
         eval_episode_rewards = []
+        win_history = []
         eval_obs = self.eval_envs.reset()[:,0:4,:]
         
         eval_rnn_states = np.zeros((self.n_eval_rollout_threads, *self.buffer.rnn_states.shape[2:]), dtype=np.float32)
@@ -160,11 +160,11 @@ class FootballRunner(Runner):
         for episode in range(eval_episodes):
             for eval_step in range(self.episode_length):
                 self.trainer.prep_rollout()
-                action_mask = np.concatenate(np.array((1 - eval_obs[...,: self.eval_envs.action_space.n]),dtype=float)) 
+                available_actions = np.array(eval_obs[...,: self.eval_envs.action_space.n])
                 eval_action, eval_rnn_states = self.trainer.policy.act(np.concatenate(eval_obs),
                                                                     np.concatenate(eval_rnn_states),
                                                                     np.concatenate(eval_masks),
-                                                                    available_actions=action_mask,
+                                                                    available_actions=np.concatenate(available_actions,dtype=float),
                                                                     deterministic=False)
                 eval_actions = np.array(np.split(_t2n(eval_action), self.n_eval_rollout_threads))
                 eval_rnn_states = np.array(np.split(_t2n(eval_rnn_states), self.n_eval_rollout_threads))
@@ -195,7 +195,7 @@ class FootballRunner(Runner):
                 #     raise NotImplementedError
 
                 # Obser reward and next obs
-                eval_obs, eval_rewards, eval_dones, _, eval_infos = self.eval_envs.step(eval_actions_env)
+                eval_obs, eval_rewards, eval_dones, won_mask, eval_infos = self.eval_envs.step(eval_actions_env)
                 eval_dones = eval_dones[:,0:4]
                 eval_obs = eval_obs[:,0:4,:]
                 eval_rewards = eval_rewards[:,0:4]
@@ -207,12 +207,17 @@ class FootballRunner(Runner):
 
             eval_average_episode_rewards = np.sum(np.array(eval_episode_rewards), axis=0)
             eval_average_episode_rewards = np.mean(eval_average_episode_rewards)
+            eval_episode_rewards = []
             eval_episodes_rewards.append(eval_average_episode_rewards)
-
+            win_history.append(won_mask)
+            print(episode)
+            print(eval_average_episode_rewards)
+            print(win_history)
         eval_env_infos = {}
         eval_episodes_rewards = np.array(eval_episodes_rewards)
+        win_history = np.array(win_history,dtype=float)
         eval_env_infos['eval_average_episode_rewards'] =  eval_episodes_rewards
-        print("eval average episode rewards of agent: " + str(eval_average_episode_rewards))
+        eval_env_infos['winnning rate'] =  win_history
         self.log_env(eval_env_infos, total_num_steps)
 
     @torch.no_grad()

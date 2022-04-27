@@ -173,11 +173,8 @@ def get_config():
                         help="Number of parallel envs for evaluating rollouts")
     parser.add_argument("--n_render_rollout_threads", type=int, default=1,
                         help="Number of parallel envs for rendering rollouts")
-<<<<<<< HEAD
+
     parser.add_argument("--num_env_steps", type=int, default=10e7,
-=======
-    parser.add_argument("--num_env_steps", type=int, default=10e6,
->>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
                         help='Number of environment steps to train (default: 10e6)')
     parser.add_argument("--user_name", type=str, default='marl',help="[for wandb usage], to specify user's name for simply collecting training data.")
     parser.add_argument("--use_wandb", action='store_false', default=True, help="[for wandb usage], by default True, will log date to wandb server. or else will use tensorboard to log data.")
@@ -224,7 +221,7 @@ def get_config():
                         help="Time length of chunks used to train a recurrent_policy")
 
     # optimizer parameters
-    parser.add_argument("--lr", type=float, default=5e-4,
+    parser.add_argument("--lr", type=float, default=1e-3,
                         help='learning rate (default: 5e-4)')
     parser.add_argument("--critic_lr", type=float, default=5e-4,
                         help='critic learning rate (default: 5e-4)')
@@ -233,18 +230,18 @@ def get_config():
     parser.add_argument("--weight_decay", type=float, default=0)
 
     # ppo parameters
-    parser.add_argument("--ppo_epoch", type=int, default=15,
+    parser.add_argument("--ppo_epoch", type=int, default=20,
                         help='number of ppo epochs (default: 15)')
     parser.add_argument("--use_clipped_value_loss",
                         action='store_false', default=True, help="by default, clip loss value. If set, do not clip loss value.")
     parser.add_argument("--clip_param", type=float, default=0.2,
                         help='ppo clip parameter (default: 0.2)')
-    parser.add_argument("--num_mini_batch", type=int, default=1,
+    parser.add_argument("--num_mini_batch", type=int, default=4,
                         help='number of batches for ppo (default: 1)')
     parser.add_argument("--entropy_coef", type=float, default=0.01,
                         help='entropy term coefficient (default: 0.01)')
     parser.add_argument("--value_loss_coef", type=float,
-                        default=1, help='value loss coefficient (default: 0.5)')
+                        default=0.8, help='value loss coefficient (default: 0.5)')
     parser.add_argument("--use_max_grad_norm",
                         action='store_false', default=True, help="by default, use max norm of gradients. If set, do not use.")
     parser.add_argument("--max_grad_norm", type=float, default=10.0,
@@ -268,14 +265,11 @@ def get_config():
     parser.add_argument("--use_linear_lr_decay", action='store_true',
                         default=False, help='use a linear schedule on the learning rate')
     # save parameters
-    parser.add_argument("--save_interval", type=int, default=100, help="time duration between contiunous twice models saving.")
+    parser.add_argument("--save_interval", type=int, default=100, help="time duration between contiunous twice models saving.")  
 
     # log parameters
-<<<<<<< HEAD
-    parser.add_argument("--log_interval", type=int, default=25, help="time duration between contiunous twice log printing.")
-=======
-    parser.add_argument("--log_interval", type=int, default=4, help="time duration between contiunous twice log printing.")
->>>>>>> 7d8224aeb79fa1e032994b185678e8b7d8b3b56c
+
+    parser.add_argument("--log_interval", type=int, default=1, help="time duration between contiunous twice log printing.")
 
     # eval parameters
     parser.add_argument("--use_eval", action='store_true', default=True, help="by default, do not start evaluation. If set`, start evaluation alongside with training.")
