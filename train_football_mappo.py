@@ -1,3 +1,4 @@
+from multiprocessing import Pipe
 import sys
 import os
 from sklearn.model_selection import learning_curve
@@ -10,7 +11,7 @@ from pathlib import Path
 import torch
 from config import get_config
 from env.chooseenv import make
-from env.env_wrappers import DummyVecEnv
+from env.env_wrappers import DummyVecEnv,SubprocVecEnv
 
 
 # from env/config.json
@@ -41,16 +42,16 @@ DEFAULT_ENV_CONFIG = {
 
 # build parallel vector envs
 def make_train_env(all_args):
-    def get_env_list(rank):
+    def get_env_fn_list(rank):
         def init_env():
             env = make(all_args.env_name)
             env.seed(all_args.seed + rank * 1000)
             return env
         return init_env
     if all_args.n_rollout_threads == 1:
-        return DummyVecEnv([get_env_list(0)])
+        return DummyVecEnv([get_env_fn_list(0)])
     else:
-        raise NotImplementedError      #TODO:implement vector envs,may need asy_wait
+        return SubprocVecEnv([get_env_fn_list(i) for i in range(all_args.n_rollout_threads)])      #TODO:implement vector envs,may need asy_wait
 
 
 def make_eval_env(all_args):
@@ -63,7 +64,7 @@ def make_eval_env(all_args):
     if all_args.n_eval_rollout_threads == 1:
         return DummyVecEnv([get_env_fn_list(0)])
     else:
-        raise NotImplementedError       #TODO:implement vector envs,may need asy_wait
+        return SubprocVecEnv([get_env_fn_list(i) for i in range(all_args.n_eval_rollout_threads)])       #TODO:implement vector envs,may need asy_wait
 
 
 
@@ -85,7 +86,8 @@ def parse_args(args, parser):
 def main(args):
     parser = get_config()
     all_args = parse_args(args, parser)
-
+    all_args.number_of_left_players_agent_controls = DEFAULT_ENV_CONFIG[all_args.env_name]["agent_nums"][0]
+    all_args.number_of_left_players_agent_controls = DEFAULT_ENV_CONFIG[all_args.env_name]["agent_nums"][1]
     if all_args.algorithm_name == "rmappo":
         assert (all_args.use_recurrent_policy or all_args.use_naive_recurrent_policy), ("check recurrent policy!")
     elif all_args.algorithm_name == "mappo":
@@ -97,7 +99,7 @@ def main(args):
     # cuda
     if all_args.cuda and torch.cuda.is_available():
         print("choose to use gpu...")
-        device = torch.device("cuda:1")
+        device = torch.device("cuda:0")
         torch.set_num_threads(all_args.n_training_threads)
         if all_args.cuda_deterministic:
             torch.backends.cudnn.benchmark = False

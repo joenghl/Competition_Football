@@ -1,3 +1,4 @@
+from concurrent.futures import thread
 import time
 from matplotlib.style import available
 import numpy as np
@@ -34,7 +35,7 @@ class FootballRunner(Runner):
                 values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic, available_actions= self.collect(step)
                 # rearrange agent actions and opponent actions
                 actions_env = np.squeeze(actions,axis=-1).tolist()
-                for threads in range(self.n_eval_rollout_threads):
+                for threads in range(self.n_rollout_threads):
                     actions_env[threads] = actions_env[threads] + opp_actions[threads]
                 # Obser reward and next obs       
                 obs, rewards, dones, _, info_after = self.envs.step(actions_env)
@@ -71,21 +72,7 @@ class FootballRunner(Runner):
 
                 train_infos["average_episode_rewards"] = np.mean(self.buffer.rewards) * self.episode_length
                 print("average episode rewards is {}".format(train_infos["average_episode_rewards"]))
-
-                # learning_rate = 0.01
-                # for i in range(100):
-                #     wandb.log({"learning_rate": learning_rate},i)
-
-                self.log_train(train_infos, total_num_steps)
-
-
-                # learning_rate = 0.02
-                # for i in range(100):
-                #     wandb.log({"learning_rate": learning_rate},i+100)                
-
-
-
-                
+                self.log_train(train_infos, total_num_steps)               
             # eval
             if episode % self.eval_interval == 0 and self.use_eval:
 
@@ -121,13 +108,14 @@ class FootballRunner(Runner):
         rnn_states_critic = np.array(np.split(_t2n(rnn_states_critic), self.n_rollout_threads))
         #get opponent actions
         opp_actions = []
+        current_states = self.envs.get_current_states()
         for threads in range(self.n_rollout_threads):
             thr_opp_actions = []
             for obs_id in range(self.right_agent_num):
-                opp_action = my_controller(self.envs.envs[threads].current_state[self.left_agent_num + obs_id],
+                opp_action = my_controller(current_states[threads][self.left_agent_num + obs_id],
                                             self.envs.joint_action_space[self.left_agent_num:-1])
                 thr_opp_actions.append(opp_action)
-            decode_action = self.envs.envs[threads].decode(thr_opp_actions)
+            decode_action = self.envs.decode(thr_opp_actions)
             opp_actions.append(decode_action)
 
         return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
@@ -157,8 +145,9 @@ class FootballRunner(Runner):
         
         eval_rnn_states = np.zeros((self.n_eval_rollout_threads, *self.buffer.rnn_states.shape[2:]), dtype=np.float32)
         eval_masks = np.ones((self.n_eval_rollout_threads, self.left_agent_num, 1), dtype=np.float32)
+        eval_episodes = int(eval_episodes) // self.n_eval_rollout_threads
         for episode in range(eval_episodes):
-            for eval_step in range(self.episode_length):
+            for eval_step in range(self.eval_episode_length):
                 self.trainer.prep_rollout()
                 available_actions = np.array(eval_obs[...,: self.eval_envs.action_space.n])
                 eval_action, eval_rnn_states = self.trainer.policy.act(np.concatenate(eval_obs),
@@ -170,13 +159,14 @@ class FootballRunner(Runner):
                 eval_rnn_states = np.array(np.split(_t2n(eval_rnn_states), self.n_eval_rollout_threads))
                 #get opponents actions
                 opp_actions = []
-                for threads in range(self.n_rollout_threads):
+                current_states = self.eval_envs.get_current_states()
+                for threads in range(self.n_eval_rollout_threads):
                     thr_opp_actions = []
                     for obs_id in range(self.right_agent_num):
-                        opp_action = my_controller(self.eval_envs.envs[threads].current_state[self.left_agent_num + obs_id],
+                        opp_action = my_controller(current_states[threads][self.left_agent_num + obs_id],
                                                     self.eval_envs.joint_action_space[self.left_agent_num:-1])
                         thr_opp_actions.append(opp_action)
-                    decode_action = self.envs.envs[threads].decode(thr_opp_actions)
+                    decode_action = self.eval_envs.decode(thr_opp_actions)
                     opp_actions.append(decode_action)
                 eval_actions_env = np.squeeze(eval_actions,axis=-1).tolist()
                 for threads in range(self.n_eval_rollout_threads):
@@ -215,9 +205,10 @@ class FootballRunner(Runner):
             print(win_history)
         eval_env_infos = {}
         eval_episodes_rewards = np.array(eval_episodes_rewards)
-        win_history = np.array(win_history,dtype=float)
+        win_history = np.array(win_history,dtype=float).reshape(-1)
         eval_env_infos['eval_average_episode_rewards'] =  eval_episodes_rewards
-        eval_env_infos['winnning rate'] =  win_history
+        eval_env_infos['winnning rate'] =  np.maximum(win_history,0)
+        eval_env_infos['winnning rate(with tie game)'] =  np.maximum(win_history,-win_history)
         self.log_env(eval_env_infos, total_num_steps)
 
     @torch.no_grad()

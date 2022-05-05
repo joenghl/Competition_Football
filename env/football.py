@@ -141,9 +141,11 @@ class Football(Game, DictObservation):
         left_score = self.current_state[0]["score"][0]
         right_score = self.current_state[0]["score"][1]
         if left_score > right_score:
-            return '1'
-        elif left_score <= right_score:
-            return '0'
+            return 1
+        elif left_score < right_score:
+            return 0
+        elif left_score == right_score:
+            return -1
 
 
     def reset(self):
