@@ -212,7 +212,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
             else:
                 if np.all(done):
                     obs = env.reset()
-            remote.send((ob, rews, done, info_bef,info_aft))
+            remote.send((obs, rews, done, info_bef,info_aft))
         elif cmd == 'reset':
             ob = env.reset()
             remote.send(ob)

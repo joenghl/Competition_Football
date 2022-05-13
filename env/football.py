@@ -26,10 +26,10 @@ class Football(Game, DictObservation):
         self.env_core = football_env.create_environment(
             env_name=conf["game_name"], stacked=False,
             representation='raw',
-            logdir='/tmp/rllib_test',
+            logdir='./reward_wekick_test',
             write_goal_dumps=False, write_full_episode_dumps=True, render=False,
-            dump_frequency=0,
-            rewards='scoring,checkpoints',
+            dump_frequency=200,
+            rewards='scoring',
             number_of_left_players_agent_controls=self.agent_nums[0],
             number_of_right_players_agent_controls=self.agent_nums[1])
         self.load_action_space(conf)

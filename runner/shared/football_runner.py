@@ -1,13 +1,11 @@
-from concurrent.futures import thread
 import time
 from matplotlib.style import available
 import numpy as np
 import torch
 from runner.shared.base_runner import Runner
-import wandb
 import imageio
 from agents.football_5v5_mappo.submission import my_controller
-
+from rewarder.rewarder_wekick import reward_warpper 
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -32,18 +30,21 @@ class FootballRunner(Runner):
             for step in range(self.episode_length):
                 print(step,self.episode_length)
                 # Sample actions
-                values, actions, opp_actions,action_log_probs, rnn_states, rnn_states_critic, available_actions= self.collect(step)
+                values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic, available_actions, pre_state = self.collect(step)
                 # rearrange agent actions and opponent actions
                 actions_env = np.squeeze(actions,axis=-1).tolist()
                 for threads in range(self.n_rollout_threads):
                     actions_env[threads] = actions_env[threads] + opp_actions[threads]
                 # Obser reward and next obs       
                 obs, rewards, dones, _, info_after = self.envs.step(actions_env)
-                print(rewards)
-                print(dones)
-                data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
-
+                print("reward:{}".format(rewards))
+                current_state = self.envs.get_current_states()
+                # rewards = reward_warpper(rewards, pre_state,current_state)  
+                rewards[:,0:4] = reward_warpper(rewards[:,0:4], pre_state, current_state, actions, opp_actions)  
+                print("reward after:{}".format(rewards))
+                print("dones:{}".format(dones)) 
                 # insert data into buffer
+                data = obs[:,0:4,:], rewards[:,0:4], dones[:,0:4], info_after, values, actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
                 self.insert(data)
 
             # compute return and update network
@@ -118,7 +119,7 @@ class FootballRunner(Runner):
             decode_action = self.envs.decode(thr_opp_actions)
             opp_actions.append(decode_action)
 
-        return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic, available_actions
+        return values, actions, opp_actions, action_log_probs, rnn_states, rnn_states_critic, available_actions, current_states
 
     def insert(self, data):
         obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic, available_actions= data
